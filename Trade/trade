@@ -1,0 +1,237 @@
+#!/usr/bin/python3
+
+import sys
+from datetime import datetime
+
+#calcul global:
+period = 20
+
+# action : {
+#     quantity: int,
+#     achat : float
+# }
+
+#Wallet:
+
+wallet = {
+    'USDT': {
+        'total': 1000.0
+    },
+    'BTC': {
+        'total' : 0,
+        'actions' : []
+    },
+    'ETH': {
+        'total' : 0,
+        'actions' : []
+    }
+}
+
+
+# Dictionary
+settings = dict()
+update = dict()
+
+next_candles = {
+    'BTC_ETH': {
+        'date': [],
+        'high': [],
+        'low': [],
+        'open':[],
+        'close':[],
+        'volume':[]
+    },
+    'USDT_ETH': {
+        'date': [],
+        'high': [],
+        'low': [],
+        'open':[],
+        'close':[],
+        'volume':[]
+    },
+    'USDT_BTC': {
+        'date': [],
+        'high': [],
+        'low': [],
+        'open':[],
+        'close':[],
+        'volume':[]
+    }
+}
+
+stack = dict()
+action = dict()
+
+statistic = {
+    'moyenne': {
+        'BTC_ETH': {
+            'high': [],
+            'low': [],
+            'open':[],
+            'close':[],
+            'volume':[]
+        },
+        'USDT_ETH': {
+            'high': [],
+            'low': [],
+            'open':[],
+            'close':[],
+            'volume':[]
+        },
+        'USDT_BTC': {
+            'high': [],
+            'low': [],
+            'open':[],
+            'close':[],
+            'volume':[]
+        }
+    },
+    'ratio': {
+        'BTC_ETH': {
+            'high': [],
+            'low': [],
+            'open':[],
+            'close':[],
+            'volume':[]
+        },
+        'USDT_ETH': {
+            'high': [],
+            'low': [],
+            'open':[],
+            'close':[],
+            'volume':[]
+        },
+        'USDT_BTC': {
+            'high': [],
+            'low': [],
+            'open':[],
+            'close':[],
+            'volume':[]
+        }
+    }
+}
+
+
+def calcMoyenne():
+    currency = ['BTC_ETH', 'USDT_ETH', 'USDT_BTC']
+    datas = ['high', 'low', 'open', 'close', 'volume']
+    for cur in currency:
+        for data in datas:
+            if (len(next_candles[cur][data]) >= period):
+                moy = 0
+                for value in next_candles[cur][data][-period:]:
+                    moy += float(value)
+                statistic['moyenne'][cur][data].append(moy / period)
+
+def calcRatio():
+    currency = ['BTC_ETH', 'USDT_ETH', 'USDT_BTC']
+    datas = ['high', 'low', 'open', 'close', 'volume']
+    for cur in currency:
+        for data in datas:
+            if (len(next_candles[cur][data]) >= period):
+                ratio = (float(next_candles[cur][data][-1]) - float(next_candles[cur][data][-period])) / float(next_candles[cur][data][-period])
+                statistic['ratio'][cur][data].append(ratio * 100)
+
+def print_dico(dico):
+    print ("\n")
+    for item in dico:
+        print(item, dico[item])
+
+def getUpdate(update):
+    update = update.split(";")
+    for item in update:
+        item = item.split(",")
+        currency = item[0]
+        item.pop(0)
+        next_candles[currency]['date'].append(item[0])
+        next_candles[currency]['high'].append(item[1])
+        next_candles[currency]['low'].append(item[2])
+        next_candles[currency]['open'].append(item[3])
+        next_candles[currency]['close'].append(item[4])
+        next_candles[currency]['volume'].append(item[5])
+    calcMoyenne()
+    calcRatio()
+
+
+def getStack(update):
+    update = update.split(',')
+    for item in update:
+        item = item.split(":")
+        currency = item[0]
+        item.pop(0)
+        stack[currency] = item[0]
+
+def print_currency(currency):
+    print (currency, next_candles[currency])
+    print ()
+
+def chooseAction(time):
+    print(datetime.fromtimestamp(int(update['next_candles']['BTC_ETH']['date'][-1])).strftime("%A, %B %d, %Y %I:%M:%S"), file=sys.stderr)
+    print("candles BTC_ETH high : ", update['next_candles']['BTC_ETH']['high'][-5:], file=sys.stderr)
+    print("candles USDT_ETH high : ", update['next_candles']['USDT_ETH']['high'][-5:], file=sys.stderr)
+    print("candles USDT_BTC high : ", update['next_candles']['USDT_BTC']['high'][-5:], file=sys.stderr)
+    print("moyenne BTC_ETH", statistic['moyenne']['BTC_ETH']['high'][-5:], file=sys.stderr)
+    print("moyenne USDT_ETH", statistic['moyenne']['USDT_ETH']['high'][-5:], file=sys.stderr)
+    print("moyenne USDT_BTC", statistic['moyenne']['USDT_BTC']['high'][-5:], file=sys.stderr)
+    print("ratio BTC_ETH", statistic['ratio']['BTC_ETH']['high'][-5:], file=sys.stderr)
+    print("ratio USDT_ETH", statistic['ratio']['USDT_ETH']['high'][-5:], file=sys.stderr)
+    print("ratio USDT_BTC", statistic['ratio']['USDT_BTC']['high'][-5:], file=sys.stderr)
+    print(wallet, file=sys.stderr)
+    print("_______________________________________", file=sys.stderr)
+    if (wallet['ETH']['total'] != 0):
+        i = 0
+        selling = 0
+        while (i < len(wallet['ETH']['actions'])):
+            if (float(update['next_candles']['USDT_ETH']['high'][-1]) > 1):
+                if (float(update['next_candles']['USDT_ETH']['close'][-1]) > wallet['ETH']['actions'][i]['price'] + 500):
+                    selling += wallet['ETH']['actions'][i]['quantity']
+                    wallet['ETH']['total'] -= wallet['ETH']['actions'][i]['quantity']
+                    del wallet['ETH']['actions'][i]
+            i += 1
+        if (selling != 0):
+            print("sell USDT_ETH " + str(selling))
+            print("sell USDT_ETH " + str(selling), file=sys.stderr)
+            wallet['USDT']['total'] += selling * float(update['next_candles']['USDT_ETH']['close'][-1]) * 0.998
+            return
+    else:
+        i = 1
+        while (i < 6):
+            # print(i, statistic['ratio']['USDT_ETH']['high'][-i], file=sys.stderr)
+            if (statistic['ratio']['USDT_ETH']['high'][-i] > -1):
+                break
+            i += 1
+        if (i == 6):
+            achat = wallet['USDT']['total'] / 2
+            price = float(update['next_candles']['USDT_ETH']['close'][-1])
+            quant = achat / price
+            print(achat, price, quant, file=sys.stderr)
+            print("buy USDT_ETH " + str(quant))
+            print("buy USDT_ETH " + str(quant), file=sys.stderr)
+            wallet['ETH']['actions'].append({
+                'price': price,
+                'quantity': quant * 0.998
+                })
+            wallet['ETH']['total'] += quant * 0.998
+            wallet['USDT']['total'] -= achat
+            return
+    print ("pass")
+    # sys.exit(1)
+
+
+while 42:
+    # input = input("Enter your input: ");
+    line = input();
+    line = line.split(" ")
+    if line[0] == "settings":
+        settings[line[1]] = line[2]
+    elif line[0] == "update":
+        if line[2] == "next_candles":
+            getUpdate(line[3])
+            update[line[2]] = next_candles
+            # print(update, file=sys.stderr)
+        elif line[2] == "stacks":
+            getStack(line[3])
+            # print(stack, file=sys.stderr)
+    elif line[0] == "action" and line[1] == "order":
+        time = int(line[2])
+        chooseAction(time)
